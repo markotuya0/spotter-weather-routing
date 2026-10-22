@@ -21,7 +21,7 @@ export function RiskRibbon({ route, size = 'small' }: { route: Route; size?: 'sm
 
   return (
     <Box
-      role="img"
+      role="group"
       aria-label={summarize(route)}
       sx={{
         display: 'flex',

@@ -4,11 +4,26 @@ import { buildAnalysisResult, buildRoute } from '../../test/fixtures';
 import { Recommendation } from './Recommendation';
 
 describe('Recommendation', () => {
-  it('shows the decisive reason when fallback_level is none', () => {
-    const result = buildAnalysisResult();
+  it('shows a plain-language reason with no raw seconds or route IDs when fallback_level is none', () => {
+    const winner = buildRoute();
+    const runnerUp = buildRoute({
+      id: 'r2',
+      rank: 2,
+      name: 'Route 2',
+      ranking_keys: { no_travel_miles: 0, severe_miles: 24.5, high_miles: 40.1, average_risk: 0.9, duration_seconds: 31000 },
+    });
+    const result = buildAnalysisResult({ routes: [winner, runnerUp] });
     render(<Recommendation recommendation={result.recommendation} routes={result.routes} />);
     expect(screen.getByText(/Recommended: Route 1/)).toBeInTheDocument();
-    expect(screen.getByText(/0.0 Severe miles vs 24.5 on Route 2/)).toBeInTheDocument();
+    expect(screen.getByText(/0.0 mi of severe-risk road, versus 24.5 mi on the next-best route/)).toBeInTheDocument();
+    expect(screen.queryByText(/\br2\b/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/30040s/)).not.toBeInTheDocument();
+  });
+
+  it('falls back to a generic reason when only one route is returned', () => {
+    const result = buildAnalysisResult();
+    render(<Recommendation recommendation={result.recommendation} routes={result.routes} />);
+    expect(screen.getByText('Only route returned for this trip.')).toBeInTheDocument();
   });
 
   it('replaces the reason with fallback copy for incomplete_data', () => {

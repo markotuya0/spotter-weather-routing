@@ -4,14 +4,20 @@ import Button from '@mui/material/Button';
 import CircularProgress from '@mui/material/CircularProgress';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import type { GeoJSONSource, MapLayerMouseEvent } from 'maplibre-gl';
-import { Map as MapLibreMap } from 'maplibre-gl';
+import { Map as MapLibreMap, setWorkerUrl } from 'maplibre-gl';
+// MapLibre resolves its worker relative to the bundle, but Vite never emits that file into dist, so
+// production requests fall back to index.html and fail. Importing the worker as an asset makes Vite
+// emit it and gives MapLibre the real URL (works identically in dev and production).
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { LatLng, Route, WeatherSample } from '../../api/types';
+import type { Heatmap, LatLng, Route, WeatherSample } from '../../api/types';
 import { tokens } from '../../theme/theme';
 import { RISK_STYLES } from '../../theme/riskColors';
 import { CheckpointOverlay } from './CheckpointOverlay';
 import { buildCheckpointFeatureCollection } from './checkpointGeoJson';
+import { HeatmapLegend } from './HeatmapLegend';
+import { buildHeatmapFeatureCollection } from './heatmapGeoJson';
 import { buildRiskSegmentFeatureCollection } from './riskSegmentGeoJson';
 import {
   buildEndpointFeatureCollection,
@@ -20,12 +26,16 @@ import {
   type Bbox,
 } from './routeGeoJson';
 
+setWorkerUrl(maplibreWorkerUrl);
+
 export const OPENFREEMAP_LIBERTY_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
 
 const ROUTES_SOURCE_ID = 'routes';
 const ENDPOINTS_SOURCE_ID = 'endpoints';
 const RISK_SEGMENTS_SOURCE_ID = 'risk-segments';
 const CHECKPOINTS_SOURCE_ID = 'checkpoints';
+const HEATMAP_SOURCE_ID = 'heatmap';
+const HEATMAP_LAYER_IDS = ['heatmap-blobs', 'heatmap-unknown'];
 const ROUTE_CLICK_LAYERS = ['routes-unselected', 'route-selected-casing', 'route-risk-segments', 'route-labels'];
 const CHECKPOINT_CLICK_LAYERS = ['checkpoints-minor', 'checkpoints-major'];
 
@@ -72,6 +82,9 @@ interface MapViewProps {
   onSelectCheckpoint?: (index: number | null) => void;
   weatherSamples?: Record<string, WeatherSample>;
   loadWeightLb?: number;
+  heatmap?: Heatmap;
+  /** Forecast frame (hours after departure) to draw from `heatmap.points[].risk`. */
+  forecastHour?: number;
 }
 
 type MapStatus = 'loading' | 'ready' | 'error';
@@ -87,6 +100,8 @@ export function MapView({
   onSelectCheckpoint,
   weatherSamples,
   loadWeightLb = 0,
+  heatmap,
+  forecastHour = 0,
 }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -95,6 +110,7 @@ export function MapView({
   const lastFittedRoutesRef = useRef<Route[] | undefined>(undefined);
   const [status, setStatus] = useState<MapStatus>('loading');
   const [projectedPoint, setProjectedPoint] = useState<{ x: number; y: number } | null>(null);
+  const [heatmapVisible, setHeatmapVisible] = useState(true);
   const isMobile = useMediaQuery('(max-width:767.98px)');
 
   const selectedRoute = useMemo(
@@ -150,6 +166,44 @@ export function MapView({
       map.addSource(CHECKPOINTS_SOURCE_ID, {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
+      });
+      map.addSource(HEATMAP_SOURCE_ID, {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+
+      // Heatmap sits beneath routes and checkpoints (`06` §5). Known levels are soft blobs at 55%
+      // opacity; unknown points get a '?' glyph instead of a colour, so missing data never looks Low.
+      map.addLayer({
+        id: 'heatmap-blobs',
+        type: 'circle',
+        source: HEATMAP_SOURCE_ID,
+        filter: ['!=', ['get', 'level'], 'unknown'],
+        paint: {
+          'circle-color': RISK_COLOR_MATCH as unknown as string,
+          // Radius doubles per zoom level (exponential base 2). At zoom 6 it is ~20 px, about 60% of the
+          // spacing between ~25 mi samples, so each blob stays close to the point it represents.
+          'circle-radius': ['interpolate', ['exponential', 2], ['zoom'], 4, 5, 11, 640],
+          'circle-blur': 0.9,
+          'circle-opacity': 0.55,
+        },
+      });
+      map.addLayer({
+        id: 'heatmap-unknown',
+        type: 'symbol',
+        source: HEATMAP_SOURCE_ID,
+        filter: ['==', ['get', 'level'], 'unknown'],
+        minzoom: 6,
+        layout: {
+          'text-field': RISK_STYLES.unknown.glyph,
+          'text-size': 13,
+          'text-allow-overlap': true,
+        },
+        paint: {
+          'text-color': RISK_STYLES.unknown.color,
+          'text-halo-color': '#FFFFFF',
+          'text-halo-width': 1.5,
+        },
       });
 
       map.addLayer({
@@ -332,6 +386,22 @@ export function MapView({
   useEffect(() => {
     const map = mapRef.current;
     if (status !== 'ready' || !map) return;
+    const source = map.getSource(HEATMAP_SOURCE_ID) as GeoJSONSource | undefined;
+    source?.setData(buildHeatmapFeatureCollection(heatmap, forecastHour));
+  }, [status, heatmap, forecastHour]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (status !== 'ready' || !map) return;
+    const visibility = heatmapVisible ? 'visible' : 'none';
+    for (const layerId of HEATMAP_LAYER_IDS) {
+      map.setLayoutProperty(layerId, 'visibility', visibility);
+    }
+  }, [status, heatmapVisible]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (status !== 'ready' || !map) return;
     const riskSource = map.getSource(RISK_SEGMENTS_SOURCE_ID) as GeoJSONSource | undefined;
     const checkpointsSource = map.getSource(CHECKPOINTS_SOURCE_ID) as GeoJSONSource | undefined;
     riskSource?.setData(buildRiskSegmentFeatureCollection(selectedRoute));
@@ -361,11 +431,10 @@ export function MapView({
 
   return (
     <Box sx={{ position: 'relative', width: '100%', height: '100%', minHeight: 280 }}>
-      <Box
-        ref={containerRef}
-        data-testid="maplibre-container"
-        sx={{ width: '100%', height: '100%' }}
-      />
+      {/* MapLibre adds `position: relative` to its container, so the absolute sizing lives on this wrapper. */}
+      <Box sx={{ position: 'absolute', inset: 0 }}>
+        <Box ref={containerRef} data-testid="maplibre-container" sx={{ width: '100%', height: '100%' }} />
+      </Box>
       {status === 'ready' && routes && routes.length > 0 && (
         <Button
           variant="contained"
@@ -375,6 +444,31 @@ export function MapView({
         >
           Fit routes
         </Button>
+      )}
+      {status === 'ready' && heatmap && (
+        <Button
+          variant="outlined"
+          size="small"
+          aria-pressed={heatmapVisible}
+          onClick={() => setHeatmapVisible((visible) => !visible)}
+          sx={{
+            position: 'absolute',
+            top: 12,
+            left: 12,
+            backgroundColor: 'background.paper',
+            '&:focus-visible': { outline: '2px solid', outlineColor: tokens.brand, outlineOffset: 2 },
+          }}
+        >
+          Conditions heatmap: {heatmapVisible ? 'on' : 'off'}
+        </Button>
+      )}
+      {status === 'ready' && heatmap && heatmapVisible && (
+        <HeatmapLegend
+          startTime={heatmap.start_time}
+          hour={forecastHour}
+          pointCount={heatmap.points.length}
+          loadWeightLb={loadWeightLb > 0 ? loadWeightLb : undefined}
+        />
       )}
       {status === 'loading' && (
         <Box

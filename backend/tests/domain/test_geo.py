@@ -7,6 +7,7 @@ from domain.geo import (
     encode_polyline,
     haversine_mi,
     point_at_distance,
+    points_between_distances,
     rdp_simplify,
     scale_to_distance,
 )
@@ -90,6 +91,34 @@ def test_point_at_distance_skips_zero_length_segment():
     cum = scale_to_distance(raw_cum, 100.0)
     pos = point_at_distance(points, cum, 0.0)
     assert pos == points[0]
+
+
+def test_points_between_distances_keeps_interior_vertices_not_a_straight_chord():
+    # A right-angle route: straight chord from 0 to 100 would cut the corner,
+    # but the real geometry bends at the middle vertex (lat jumps 0 -> 5).
+    points = [LatLng(0.0, 0.0), LatLng(0.0, 10.0), LatLng(5.0, 10.0)]
+    raw_cum = cumulative_distances_mi(points)
+    cum = scale_to_distance(raw_cum, 100.0)
+    seg = points_between_distances(points, cum, 0.0, 100.0)
+    assert len(seg) == 3
+    assert seg[0] == points[0]
+    assert seg[1] == points[1]
+    assert seg[-1] == points[-1]
+
+
+def test_points_between_distances_sub_range_excludes_vertices_outside_bounds():
+    points = [LatLng(0.0, 0.0), LatLng(0.0, 5.0), LatLng(0.0, 10.0)]
+    raw_cum = cumulative_distances_mi(points)
+    cum = scale_to_distance(raw_cum, 100.0)
+    # [60, 100] should not include the vertex at ~50 (cum index 1).
+    seg = points_between_distances(points, cum, 60.0, 100.0)
+    assert len(seg) == 2
+    assert seg[-1] == points[-1]
+
+
+def test_points_between_distances_single_point_geometry():
+    points = [LatLng(5.0, 5.0)]
+    assert points_between_distances(points, [0.0], 0.0, 0.0) == points
 
 
 @given(

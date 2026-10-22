@@ -17,6 +17,7 @@ __all__ = [
     "cumulative_distances_mi",
     "scale_to_distance",
     "point_at_distance",
+    "points_between_distances",
     "rdp_simplify",
     "encode_polyline",
 ]
@@ -96,6 +97,24 @@ def point_at_distance(points: Sequence[LatLng], cum: Sequence[float], d: float) 
         lat=p0.lat + (p1.lat - p0.lat) * frac,
         lng=p0.lng + (p1.lng - p0.lng) * frac,
     )
+
+
+def points_between_distances(
+    points: Sequence[LatLng], cum: Sequence[float], lo: float, hi: float
+) -> List[LatLng]:
+    """Boundary points at `lo`/`hi` plus every original vertex strictly between
+    them, in route order.
+
+    Used to build a sub-segment's polyline that follows the real route shape
+    (rather than a straight chord from `lo` to `hi`) — e.g. a risk-colored
+    overlay segment of the full route geometry.
+    """
+    if len(points) <= 1:
+        return list(points)
+    start = point_at_distance(points, cum, lo)
+    end = point_at_distance(points, cum, hi)
+    middle = [p for p, c in zip(points, cum) if lo < c < hi]
+    return [start, *middle, end]
 
 
 def _perpendicular_distance_mi(p: LatLng, a: LatLng, b: LatLng) -> float:

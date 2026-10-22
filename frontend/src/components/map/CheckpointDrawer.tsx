@@ -106,7 +106,13 @@ export function CheckpointDrawer({
         fullWidth
         onClick={() => setOpen((value) => !value)}
         endIcon={open ? <ExpandMoreIcon /> : <ExpandLessIcon />}
-        sx={{ justifyContent: 'space-between', px: 2, py: 1, borderRadius: 0 }}
+        sx={{
+          justifyContent: 'space-between',
+          px: 2,
+          py: 1,
+          borderRadius: 0,
+          '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: -2 },
+        }}
       >
         {label}
       </Button>

@@ -54,7 +54,15 @@ export function CheckpointTable({
                 selected={selected}
                 aria-selected={selected}
                 onClick={() => onSelectCheckpoint(checkpoint.index)}
-                sx={{ cursor: 'pointer' }}
+                // Rows are operable from the keyboard too (Enter/Space), with a visible focus ring.
+                tabIndex={0}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    onSelectCheckpoint(checkpoint.index);
+                  }
+                }}
+                sx={{ cursor: 'pointer', '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: -2 } }}
               >
                 <TableCell sx={{ fontVariantNumeric: 'tabular-nums' }}>{formatMiles(checkpoint.distance_miles)}</TableCell>
                 <TableCell sx={{ fontVariantNumeric: 'tabular-nums' }}>{formatTime(checkpoint.eta)}</TableCell>
