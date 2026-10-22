@@ -8,6 +8,7 @@ import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Typography from '@mui/material/Typography';
 import { useRef, useState, type FormEvent } from 'react';
 import type { CheckpointIntervalMiles, TripInput } from '../../api/types';
+import { tokens } from '../../theme/theme';
 import { PlaceAutocomplete } from './PlaceAutocomplete';
 import { localDateTimeToIsoWithOffset } from './datetime';
 import {
@@ -70,6 +71,7 @@ export function TripForm({ onSubmit, isSubmitting, initialValues }: TripFormProp
       >
         <PlaceAutocomplete
           label="Origin"
+          placeholder="e.g. Denver, CO"
           value={values.origin}
           onChange={(origin) => setValues((prev) => ({ ...prev, origin }))}
           error={errors.origin}
@@ -83,6 +85,7 @@ export function TripForm({ onSubmit, isSubmitting, initialValues }: TripFormProp
       >
         <PlaceAutocomplete
           label="Destination"
+          placeholder="e.g. Omaha, NE"
           value={values.destination}
           onChange={(destination) => setValues((prev) => ({ ...prev, destination }))}
           error={errors.destination}
@@ -105,6 +108,7 @@ export function TripForm({ onSubmit, isSubmitting, initialValues }: TripFormProp
         label="Load weight"
         type="number"
         inputMode="decimal"
+        placeholder="e.g. 38000"
         value={values.loadWeightLb}
         onChange={(event) => setValues((prev) => ({ ...prev, loadWeightLb: event.target.value }))}
         error={Boolean(errors.loadWeightLb)}
@@ -113,6 +117,7 @@ export function TripForm({ onSubmit, isSubmitting, initialValues }: TripFormProp
           'Load weight changes risk at 30,000 lb, 40,000 lb and above thresholds.'
         }
         slotProps={{
+          inputLabel: { shrink: true },
           input: { endAdornment: <InputAdornment position="end">lb</InputAdornment> },
         }}
       />
@@ -129,9 +134,20 @@ export function TripForm({ onSubmit, isSubmitting, initialValues }: TripFormProp
           }}
           aria-labelledby="checkpoint-spacing-label"
         >
-          <ToggleButton value={10}>10 mi</ToggleButton>
-          <ToggleButton value={25}>25 mi</ToggleButton>
-          <ToggleButton value={50}>50 mi</ToggleButton>
+          {[10, 25, 50].map((miles) => (
+            <ToggleButton
+              key={miles}
+              value={miles}
+              // Explicit colours: MUI's default selected/unselected text pairs fail WCAG AA contrast.
+              sx={{
+                color: tokens.ink,
+                '&.Mui-selected, &.Mui-selected:hover': { backgroundColor: tokens.brand, color: '#FFFFFF' },
+                '&:focus-visible': { outline: '2px solid', outlineColor: tokens.brand, outlineOffset: 2 },
+              }}
+            >
+              {miles} mi
+            </ToggleButton>
+          ))}
         </ToggleButtonGroup>
       </Stack>
 

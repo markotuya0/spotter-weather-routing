@@ -2,6 +2,7 @@ import Alert from '@mui/material/Alert';
 import AlertTitle from '@mui/material/AlertTitle';
 import Typography from '@mui/material/Typography';
 import type { Recommendation as RecommendationType, Route } from '../../api/types';
+import { describeRecommendationReason } from './recommendationReason';
 
 const FALLBACK_TEXT: Record<'incomplete_data' | 'no_safe_route', string> = {
   incomplete_data: 'No route has complete weather data; showing the best available with partial data.',
@@ -25,14 +26,12 @@ export function Recommendation({
   }
 
   const recommendedRoute = routes.find((route) => route.id === recommendation.route_id);
-  const topReason = recommendation.reasons.find((reason) => reason.decisive) ?? recommendation.reasons[0];
+  const reasonText = describeRecommendationReason(recommendation, routes);
 
   return (
     <Alert severity="success" icon={false}>
-      <AlertTitle>
-        Recommended: {recommendedRoute?.name ?? 'Route'}
-      </AlertTitle>
-      {topReason && <Typography variant="body2">{topReason.text}</Typography>}
+      <AlertTitle>Recommended: {recommendedRoute?.name ?? 'Route'}</AlertTitle>
+      {reasonText && <Typography variant="body2">{reasonText}</Typography>}
     </Alert>
   );
 }

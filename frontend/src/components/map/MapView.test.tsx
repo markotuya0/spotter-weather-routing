@@ -1,5 +1,6 @@
 import { fireEvent, render, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { Heatmap } from '../../api/types';
 import { buildCheckpoint, buildRoute } from '../../test/fixtures';
 
 interface HandlerEntry {
@@ -52,6 +53,12 @@ const { mapInstances, MapMock } = vi.hoisted(() => {
       this.layers.push(def);
     }
 
+    layoutCalls: Array<{ id: string; name: string; value: unknown }> = [];
+
+    setLayoutProperty(id: string, name: string, value: unknown) {
+      this.layoutCalls.push({ id, name, value });
+    }
+
     getCanvas() {
       return { style: this.canvasStyle };
     }
@@ -80,7 +87,9 @@ const { mapInstances, MapMock } = vi.hoisted(() => {
 
 vi.mock('maplibre-gl', () => ({
   Map: MapMock,
+  setWorkerUrl: vi.fn(),
 }));
+vi.mock('maplibre-gl/dist/maplibre-gl-worker.mjs?url', () => ({ default: '/worker.mjs' }));
 vi.mock('maplibre-gl/dist/maplibre-gl.css', () => ({}));
 
 import { MapView } from './MapView';
@@ -241,5 +250,119 @@ describe('MapView', () => {
 
     instance.emit('click', 'checkpoints-major', { features: [{ properties: { index: 3 } }] });
     expect(onSelectCheckpoint).toHaveBeenCalledWith(3);
+  });
+
+  describe('conditions heatmap', () => {
+    const heatmap: Heatmap = {
+      start_time: '2026-10-22T20:00:00Z',
+      hours: 49,
+      legend: ['low', 'moderate', 'high', 'severe', 'no_travel'],
+      encoding: { risk: '0-4 = low..no_travel, 255 = unknown' },
+      points: [
+        { lat: 40.1, lng: -103.2, route_ids: ['r1'], risk: [2, 0] },
+        { lat: 41.5, lng: -100.0, route_ids: ['r1'], risk: [255, 3] },
+      ],
+    };
+
+    it('draws hour 0 below the route lines and checkpoints', async () => {
+      render(<MapView routes={[buildRoute({ id: 'r1' })]} heatmap={heatmap} />);
+      const instance = mapInstances[0]!;
+      instance.emit('load');
+
+      const layerIds = instance.layers.map((layer) => layer.id);
+      expect(layerIds.indexOf('heatmap-blobs')).toBeLessThan(layerIds.indexOf('routes-unselected'));
+      expect(layerIds.indexOf('heatmap-unknown')).toBeLessThan(layerIds.indexOf('checkpoints-major'));
+
+      await waitFor(() => expect(instance.sources.heatmap!.setData).toHaveBeenCalled());
+      const data = instance.sources.heatmap!.data as { features: Array<{ geometry: { coordinates: number[] }; properties: { level: string } }> };
+      expect(data.features.map((f) => f.geometry.coordinates)).toEqual([
+        [-103.2, 40.1],
+        [-100.0, 41.5],
+      ]);
+      expect(data.features.map((f) => f.properties.level)).toEqual(['high', 'unknown']);
+    });
+
+    it('hides and restores heatmap layers from the toggle without refetching anything', async () => {
+      const { getByRole } = render(<MapView heatmap={heatmap} />);
+      const instance = mapInstances[0]!;
+      instance.emit('load');
+
+      const toggle = await waitFor(() => getByRole('button', { name: /conditions heatmap: on/i }));
+      expect(toggle).toHaveAttribute('aria-pressed', 'true');
+
+      fireEvent.click(toggle);
+
+      expect(getByRole('button', { name: /conditions heatmap: off/i })).toHaveAttribute('aria-pressed', 'false');
+      expect(instance.layoutCalls.filter((c) => c.value === 'none').map((c) => c.id)).toEqual([
+        'heatmap-blobs',
+        'heatmap-unknown',
+      ]);
+
+      fireEvent.click(getByRole('button', { name: /conditions heatmap: off/i }));
+
+      expect(instance.layoutCalls.slice(-2).map((c) => c.value)).toEqual(['visible', 'visible']);
+    });
+
+    it('shows the legend with unknown labelled as not Low, and hides it with the layer', async () => {
+      const { getByRole, queryByRole, getByText } = render(<MapView heatmap={heatmap} loadWeightLb={38000} />);
+      const instance = mapInstances[0]!;
+      instance.emit('load');
+
+      const legend = await waitFor(() => getByRole('region', { name: /conditions heatmap legend/i }));
+      expect(legend).toHaveTextContent('Unknown is not Low: no forecast there.');
+      expect(legend).toHaveTextContent('38,000 lb load');
+      for (const label of ['Low', 'Moderate', 'High', 'Severe', 'No travel', 'Unknown']) {
+        expect(legend).toHaveTextContent(label);
+      }
+
+      const detailsToggle = getByRole('button', { name: /about unknown data/i });
+      expect(detailsToggle).toHaveAttribute('aria-expanded', 'false');
+      fireEvent.click(detailsToggle);
+      expect(getByRole('button', { name: /hide details/i })).toHaveAttribute('aria-expanded', 'true');
+      expect(legend).toHaveTextContent('not shown as Low. No blob: no forecast point there, so it is not confirmed safe.');
+
+      fireEvent.click(getByRole('button', { name: /conditions heatmap: on/i }));
+      expect(queryByRole('region', { name: /conditions heatmap legend/i })).not.toBeInTheDocument();
+      expect(getByText(/conditions heatmap: off/i)).toBeInTheDocument();
+    });
+
+    it('draws the selected forecast frame and labels the legend with that frame time', async () => {
+      const risk = Array.from({ length: 49 }, () => 255);
+      risk[0] = 2;
+      risk[24] = 0;
+      const { getByRole, rerender } = render(
+        <MapView heatmap={{ ...heatmap, points: [{ lat: 40, lng: -100, route_ids: ['r1'], risk }] }} forecastHour={0} />,
+      );
+      const instance = mapInstances[0]!;
+      instance.emit('load');
+      const legend = await waitFor(() => getByRole('region', { name: /conditions heatmap legend/i }));
+      expect(legend).toHaveTextContent('(departure)');
+
+      rerender(
+        <MapView heatmap={{ ...heatmap, points: [{ lat: 40, lng: -100, route_ids: ['r1'], risk }] }} forecastHour={24} />,
+      );
+
+      const data = instance.sources.heatmap!.data as { features: Array<{ properties: { level: string } }> };
+      expect(data.features[0]!.properties.level).toBe('low');
+      expect(legend).toHaveTextContent(/· \+24 h/);
+      expect(legend).not.toHaveTextContent('(departure)');
+    });
+
+    it('explains an empty corridor instead of drawing nothing silently', async () => {
+      const { getByRole } = render(<MapView heatmap={{ ...heatmap, points: [] }} />);
+      mapInstances[0]!.emit('load');
+
+      const legend = await waitFor(() => getByRole('region', { name: /conditions heatmap legend/i }));
+      expect(legend).toHaveTextContent('No forecast points for this corridor.');
+    });
+
+    it('does not render the heatmap controls when the analysis has no heatmap', async () => {
+      const { queryByRole } = render(<MapView routes={[buildRoute({ id: 'r1' })]} />);
+      mapInstances[0]!.emit('load');
+
+      await waitFor(() => expect(mapInstances[0]!.sources.routes!.setData).toHaveBeenCalled());
+      expect(queryByRole('button', { name: /conditions heatmap/i })).not.toBeInTheDocument();
+      expect(queryByRole('region', { name: /conditions heatmap legend/i })).not.toBeInTheDocument();
+    });
   });
 });

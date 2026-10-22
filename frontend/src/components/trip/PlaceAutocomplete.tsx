@@ -11,9 +11,10 @@ interface PlaceAutocompleteProps {
   value: PlaceValue;
   onChange: (value: PlaceValue) => void;
   error?: string;
+  placeholder?: string;
 }
 
-export function PlaceAutocomplete({ label, value, onChange, error }: PlaceAutocompleteProps) {
+export function PlaceAutocomplete({ label, value, onChange, error, placeholder }: PlaceAutocompleteProps) {
   const [inputValue, setInputValue] = useState(value.label);
   const { data, isFetching, isError } = usePlaceSuggest(inputValue);
   const options = data?.results ?? [];
@@ -45,12 +46,14 @@ export function PlaceAutocomplete({ label, value, onChange, error }: PlaceAutoco
         <TextField
           {...params}
           label={label}
+          placeholder={placeholder}
           error={Boolean(error)}
           helperText={
             error ?? (isError ? "Couldn't search places. Press Enter to try the typed text." : undefined)
           }
           slotProps={{
             ...slotProps,
+            inputLabel: { ...slotProps.inputLabel, shrink: true },
             input: {
               ...slotProps.input,
               endAdornment: (

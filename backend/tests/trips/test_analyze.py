@@ -96,6 +96,51 @@ def test_analyze_full_request_response_flow(fixture_providers):
     assert "duration_ms" in body["meta"]
 
 
+def _decode_polyline5(encoded: str):
+    factor = 10**5
+    coords = []
+    index = 0
+    lat = 0
+    lng = 0
+    while index < len(encoded):
+        for is_lat in (True, False):
+            shift = 0
+            result = 0
+            while True:
+                byte = ord(encoded[index]) - 63
+                index += 1
+                result |= (byte & 0x1F) << shift
+                shift += 5
+                if byte < 0x20:
+                    break
+            delta = ~(result >> 1) if result & 1 else (result >> 1)
+            if is_lat:
+                lat += delta
+            else:
+                lng += delta
+        coords.append((lat / factor, lng / factor))
+    return coords
+
+
+def test_analyze_risk_segment_geometry_follows_route_not_a_straight_chord(fixture_providers):
+    # Regression for the straight-diagonal map bug: a risk segment covering a
+    # multi-vertex stretch of the route must carry its interior vertices, not
+    # just its two distance-boundary endpoints.
+    client = APIClient()
+    body = client.post("/api/trips/analyze", _valid_payload(), format="json").json()
+    for route in body["routes"]:
+        total_miles = route["summary"]["distance_miles"]
+        route_vertex_count = len(_decode_polyline5(route["geometry"]["points"]))
+        for seg in route["risk_segments"]:
+            span = seg["to_miles"] - seg["from_miles"]
+            decoded = _decode_polyline5(seg["points"])
+            if span > 0.25 * total_miles and route_vertex_count > 10:
+                assert len(decoded) > 2, (
+                    f"segment {seg['from_miles']}-{seg['to_miles']} mi rendered as a "
+                    "straight 2-point chord instead of following route geometry"
+                )
+
+
 def test_analyze_idempotent_ranking_keys_same_input(fixture_providers):
     client = APIClient()
     payload = _valid_payload()

@@ -13,7 +13,13 @@ from django.conf import settings
 from django.core.cache import cache
 
 from domain import aggregate, checkpoints, eligibility, eta as eta_mod, heatmap as heatmap_mod, ranking, risk, selection
-from domain.geo import cumulative_distances_mi, encode_polyline, point_at_distance, rdp_simplify, scale_to_distance
+from domain.geo import (
+    cumulative_distances_mi,
+    encode_polyline,
+    points_between_distances,
+    rdp_simplify,
+    scale_to_distance,
+)
 from domain.models import LatLng, RankedRoute, RiskLevel, Route, UNKNOWN, WeatherSample
 from domain.weather_match import ForecastSeries, sample_at
 
@@ -524,7 +530,7 @@ def _risk_segments(cps, levels, route_points, distance_mi: float) -> List[Dict[s
 
     out = []
     for lo, hi, level in segments:
-        seg_points = [point_at_distance(route_points, cum, d) for d in (lo, hi)]
+        seg_points = points_between_distances(route_points, cum, lo, hi)
         out.append({
             "level": level if level == UNKNOWN else level.value,
             "from_miles": round(lo, 1),
