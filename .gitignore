@@ -1,0 +1,20 @@
+# Third-party skills are not committed to public repo; see docs/00-skill-strategy.md
+.claude/skills/
+
+# Secrets — never commit API keys
+.env
+.env.*
+!.env.example
+
+# Python virtualenv (M1 domain-test env; repo scaffold proper comes in M2)
+.venv/
+__pycache__/
+*.pyc
+.coverage
+.pytest_cache/
+.hypothesis/
+
+# Frontend build output / dependencies
+frontend/node_modules/
+frontend/dist/
+*.log

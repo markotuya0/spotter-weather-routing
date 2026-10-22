@@ -1,0 +1,32 @@
+:root {
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  padding: 8px 16px;
+  background: #0e5f70;
+  color: #ffffff;
+}
+
+.skip-link:focus {
+  left: 8px;
+  top: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

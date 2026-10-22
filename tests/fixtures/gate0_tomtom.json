@@ -1,0 +1,256 @@
+{
+  "note": "Condensed Gate 0 evidence (summary fields only, no credentials). Full raw responses (2-5MB each) were not committed; this preserves the measured counts/distances/durations used for the Gate 0 verdict.",
+  "request_params_used": {
+    "endpoint": "GET https://api.tomtom.com/routing/1/calculateRoute/{origin}:{dest}/json",
+    "query": "maxAlternatives=5&travelMode=truck&vehicleWeight=18000&vehicleLength=16.5&vehicleWidth=2.6&vehicleHeight=4.0&vehicleCommercial=true",
+    "key": "REDACTED (sent as ?key=... query param)"
+  },
+  "trips": {
+    "denver_omaha": {
+      "routeCount": 4,
+      "routes": [
+        {
+          "lengthInMeters": 870993,
+          "travelTimeInSeconds": 26375,
+          "pointCount": 5309
+        },
+        {
+          "lengthInMeters": 1080894,
+          "travelTimeInSeconds": 33976,
+          "pointCount": 6590
+        },
+        {
+          "lengthInMeters": 884109,
+          "travelTimeInSeconds": 32641,
+          "pointCount": 6781
+        },
+        {
+          "lengthInMeters": 980863,
+          "travelTimeInSeconds": 38025,
+          "pointCount": 7487
+        }
+      ]
+    },
+    "la_phoenix": {
+      "routeCount": 6,
+      "routes": [
+        {
+          "lengthInMeters": 601343,
+          "travelTimeInSeconds": 21347,
+          "pointCount": 4554
+        },
+        {
+          "lengthInMeters": 752688,
+          "travelTimeInSeconds": 27392,
+          "pointCount": 7053
+        },
+        {
+          "lengthInMeters": 825900,
+          "travelTimeInSeconds": 30605,
+          "pointCount": 7062
+        },
+        {
+          "lengthInMeters": 602021,
+          "travelTimeInSeconds": 21420,
+          "pointCount": 4564
+        },
+        {
+          "lengthInMeters": 1054664,
+          "travelTimeInSeconds": 36477,
+          "pointCount": 9349
+        },
+        {
+          "lengthInMeters": 763949,
+          "travelTimeInSeconds": 28437,
+          "pointCount": 6286
+        }
+      ]
+    },
+    "chicago_atlanta": {
+      "routeCount": 6,
+      "routes": [
+        {
+          "lengthInMeters": 1172478,
+          "travelTimeInSeconds": 40914,
+          "pointCount": 11113
+        },
+        {
+          "lengthInMeters": 1221541,
+          "travelTimeInSeconds": 42373,
+          "pointCount": 11499
+        },
+        {
+          "lengthInMeters": 1284962,
+          "travelTimeInSeconds": 45133,
+          "pointCount": 11711
+        },
+        {
+          "lengthInMeters": 1275610,
+          "travelTimeInSeconds": 48294,
+          "pointCount": 12179
+        },
+        {
+          "lengthInMeters": 1569973,
+          "travelTimeInSeconds": 54401,
+          "pointCount": 14179
+        },
+        {
+          "lengthInMeters": 1282775,
+          "travelTimeInSeconds": 45273,
+          "pointCount": 12421
+        }
+      ]
+    },
+    "seattle_slc": {
+      "routeCount": 6,
+      "routes": [
+        {
+          "lengthInMeters": 1365910,
+          "travelTimeInSeconds": 44242,
+          "pointCount": 12632
+        },
+        {
+          "lengthInMeters": 1645721,
+          "travelTimeInSeconds": 54612,
+          "pointCount": 16117
+        },
+        {
+          "lengthInMeters": 1868584,
+          "travelTimeInSeconds": 70787,
+          "pointCount": 17586
+        },
+        {
+          "lengthInMeters": 1710301,
+          "travelTimeInSeconds": 68146,
+          "pointCount": 20907
+        },
+        {
+          "lengthInMeters": 1569433,
+          "travelTimeInSeconds": 59995,
+          "pointCount": 17099
+        },
+        {
+          "lengthInMeters": 2457585,
+          "travelTimeInSeconds": 90631,
+          "pointCount": 26575
+        }
+      ]
+    },
+    "dallas_houston": {
+      "routeCount": 6,
+      "routes": [
+        {
+          "lengthInMeters": 383791,
+          "travelTimeInSeconds": 12493,
+          "pointCount": 3189
+        },
+        {
+          "lengthInMeters": 439620,
+          "travelTimeInSeconds": 15564,
+          "pointCount": 4990
+        },
+        {
+          "lengthInMeters": 498805,
+          "travelTimeInSeconds": 19229,
+          "pointCount": 5571
+        },
+        {
+          "lengthInMeters": 581757,
+          "travelTimeInSeconds": 20276,
+          "pointCount": 6453
+        },
+        {
+          "lengthInMeters": 485645,
+          "travelTimeInSeconds": 18155,
+          "pointCount": 5697
+        },
+        {
+          "lengthInMeters": 672323,
+          "travelTimeInSeconds": 24371,
+          "pointCount": 6084
+        }
+      ]
+    },
+    "nyc_boston": {
+      "routeCount": 6,
+      "routes": [
+        {
+          "lengthInMeters": 362145,
+          "travelTimeInSeconds": 15747,
+          "pointCount": 5488
+        },
+        {
+          "lengthInMeters": 406708,
+          "travelTimeInSeconds": 17324,
+          "pointCount": 6061
+        },
+        {
+          "lengthInMeters": 405656,
+          "travelTimeInSeconds": 20567,
+          "pointCount": 6445
+        },
+        {
+          "lengthInMeters": 604140,
+          "travelTimeInSeconds": 25128,
+          "pointCount": 8374
+        },
+        {
+          "lengthInMeters": 642034,
+          "travelTimeInSeconds": 33793,
+          "pointCount": 11191
+        },
+        {
+          "lengthInMeters": 952186,
+          "travelTimeInSeconds": 39399,
+          "pointCount": 13066
+        }
+      ]
+    },
+    "boston_la": {
+      "routeCount": 2,
+      "routes": [
+        {
+          "lengthInMeters": 4841235,
+          "travelTimeInSeconds": 156280,
+          "pointCount": 40200
+        },
+        {
+          "lengthInMeters": 4989261,
+          "travelTimeInSeconds": 160905,
+          "pointCount": 40836
+        }
+      ]
+    }
+  },
+  "failure_cases": {
+    "invalid_coordinates (lat=999,lon=999)": {
+      "http_status": 400,
+      "body": {
+        "formatVersion": "0.0.12",
+        "detailedError": {
+          "message": "Invalid request: malformed coordinate at index [0]: [999,999]",
+          "code": "BAD_INPUT"
+        }
+      }
+    },
+    "no_drivable_route (mid_ocean 40,-40 to 41,-41)": {
+      "http_status": 400,
+      "body": {
+        "formatVersion": "0.0.12",
+        "detailedError": {
+          "message": "Engine error while executing route request: MAP_MATCHING_FAILURE: Origin (40, -40)",
+          "code": "MAP_MATCHING_FAILURE"
+        }
+      }
+    },
+    "bad_key": {
+      "http_status": 401,
+      "body": {
+        "detailedError": {
+          "code": "Unauthorized",
+          "message": "You are missing valid authentication credentials"
+        }
+      }
+    }
+  }
+}
