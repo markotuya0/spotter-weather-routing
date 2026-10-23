@@ -1,0 +1,16 @@
+name: Keep backend warm
+
+# Temporary: pings the Render backend often enough that it never hits the
+# ~15 min free-tier idle spin-down, so recruiters/reviewers testing the live
+# app don't hit a cold start. Delete this file once testing is over.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping health endpoint
+        run: curl -sf https://spotter-backend-m7oc.onrender.com/api/health
