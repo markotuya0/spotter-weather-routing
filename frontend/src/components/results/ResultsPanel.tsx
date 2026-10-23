@@ -1,12 +1,14 @@
+import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Collapse from '@mui/material/Collapse';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import Skeleton from '@mui/material/Skeleton';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { AnalysisResult } from '../../api/types';
 import { ApiError } from '../../api/client';
+import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion';
 import { ApiErrorAlert } from './ApiErrorAlert';
 import { Recommendation } from './Recommendation';
 import { RouteCard } from './RouteCard';
@@ -31,6 +33,26 @@ export function ResultsPanel({
   onSelectRoute,
 }: ResultsPanelProps) {
   const [compareOpen, setCompareOpen] = useState(false);
+  const topRef = useRef<HTMLDivElement | null>(null);
+  const cardRefs = useRef<Record<string, HTMLLIElement | null>>({});
+  const prefersReducedMotion = usePrefersReducedMotion();
+
+  // Freshly arrived results bring the recommendation into view (mobile stacks the map below this
+  // panel, so without this the user can be left looking at a blank/loading area after submitting).
+  useEffect(() => {
+    if (result) topRef.current?.scrollIntoView?.({ block: 'start', behavior: prefersReducedMotion ? 'auto' : 'smooth' });
+  }, [result, prefersReducedMotion]);
+
+  // A route picked on the map scrolls its card into view; a card clicked directly is already
+  // visible, so `nearest` is a no-op there instead of an unwanted jump.
+  useEffect(() => {
+    if (selectedRouteId) {
+      cardRefs.current[selectedRouteId]?.scrollIntoView?.({
+        block: 'nearest',
+        behavior: prefersReducedMotion ? 'auto' : 'smooth',
+      });
+    }
+  }, [selectedRouteId, prefersReducedMotion]);
 
   if (isPending) {
     return (
@@ -70,6 +92,7 @@ export function ResultsPanel({
 
   return (
     <Stack spacing={2}>
+      <Box ref={topRef} />
       <WarningList warnings={result.warnings} />
       <Recommendation recommendation={result.recommendation} routes={result.routes} />
 
@@ -83,6 +106,9 @@ export function ResultsPanel({
             selected={selectedRouteId === route.id}
             onSelect={onSelectRoute}
             recommendedDurationSeconds={recommendedRoute?.summary.duration_seconds}
+            rootRef={(el) => {
+              cardRefs.current[route.id] = el;
+            }}
           />
         ))}
       </Stack>

@@ -1,3 +1,7 @@
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import List from '@mui/material/List';
+import ListItemButton from '@mui/material/ListItemButton';
+import Stack from '@mui/material/Stack';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
@@ -5,7 +9,10 @@ import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Typography from '@mui/material/Typography';
+import useMediaQuery from '@mui/material/useMediaQuery';
+import { useEffect, useRef } from 'react';
 import type { Checkpoint, WeatherSample } from '../../api/types';
+import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion';
 import { RiskBadge } from '../common/RiskBadge';
 import { formatMiles, formatTime } from '../common/format';
 
@@ -22,11 +29,65 @@ export function CheckpointTable({
   selectedIndex,
   onSelectCheckpoint,
 }: CheckpointTableProps) {
+  const isMobile = useMediaQuery('(max-width:767.98px)');
+  const rowRefs = useRef<Record<number, HTMLElement | null>>({});
+  const prefersReducedMotion = usePrefersReducedMotion();
+
+  // A checkpoint picked on the map scrolls its row into view here; a row clicked directly is
+  // already visible, so `nearest` makes that a no-op instead of an unwanted jump.
+  useEffect(() => {
+    if (selectedIndex === null) return;
+    rowRefs.current[selectedIndex]?.scrollIntoView?.({
+      block: 'nearest',
+      behavior: prefersReducedMotion ? 'auto' : 'smooth',
+    });
+  }, [selectedIndex, prefersReducedMotion]);
+
   if (checkpoints.length === 0) {
     return (
       <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
         No checkpoints for this route.
       </Typography>
+    );
+  }
+
+  // Mobile shows the list only; tapping a row selects it, and the drawer that hosts this list
+  // switches to the full checkpoint-details view (its own mutually exclusive state), so the
+  // detail content below is not duplicated here.
+  if (isMobile) {
+    return (
+      <List sx={{ maxHeight: 320, overflowY: 'auto', py: 0 }} aria-label="Checkpoints">
+        {checkpoints.map((checkpoint) => {
+          const selected = checkpoint.index === selectedIndex;
+          return (
+            <ListItemButton
+              key={checkpoint.index}
+              ref={(el: HTMLElement | null) => {
+                rowRefs.current[checkpoint.index] = el;
+              }}
+              selected={selected}
+              onClick={() => onSelectCheckpoint(checkpoint.index)}
+              sx={{
+                gap: 1,
+                borderBottom: '1px solid',
+                borderColor: 'divider',
+                '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: -2 },
+              }}
+            >
+              <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flex: 1, minWidth: 0 }}>
+                <Typography variant="body2" sx={{ fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+                  {formatMiles(checkpoint.distance_miles)}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+                  {formatTime(checkpoint.eta)}
+                </Typography>
+                <RiskBadge level={checkpoint.risk.level} size="small" />
+              </Stack>
+              <ChevronRightIcon fontSize="small" sx={{ flexShrink: 0, color: 'text.secondary' }} />
+            </ListItemButton>
+          );
+        })}
+      </List>
     );
   }
 
@@ -50,6 +111,9 @@ export function CheckpointTable({
             return (
               <TableRow
                 key={checkpoint.index}
+                ref={(el) => {
+                  rowRefs.current[checkpoint.index] = el;
+                }}
                 hover
                 selected={selected}
                 aria-selected={selected}

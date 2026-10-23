@@ -62,6 +62,7 @@ export function MapRegion({ result, selectedRouteId, onSelectRoute }: MapRegionP
           weatherSamples={result?.weather_samples ?? {}}
           selectedIndex={selectedCheckpointIndex}
           onSelectCheckpoint={selectCheckpoint}
+          loadWeightLb={result?.inputs.load_weight_lb}
         />
       ),
     [selectedRoute, result, selectedCheckpointIndex],

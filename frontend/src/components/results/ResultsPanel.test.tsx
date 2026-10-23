@@ -37,4 +37,27 @@ describe('ResultsPanel', () => {
     renderPanel(buildAnalysisResult());
     expect(screen.queryByRole('button', { name: /compare all routes/i })).not.toBeInTheDocument();
   });
+
+  it('scrolls the selected route card into view (e.g. after picking it on the map)', () => {
+    const scrollIntoView = vi.fn();
+    HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    const result = buildAnalysisResult({
+      routes: [buildRoute({ id: 'r1', rank: 1 }), buildRoute({ id: 'r2', rank: 2, name: 'Route 2' })],
+    });
+
+    const { rerender } = render(
+      <ThemeProvider theme={theme}>
+        <ResultsPanel result={result} isPending={false} error={undefined} onRetry={vi.fn()} selectedRouteId={null} onSelectRoute={vi.fn()} />
+      </ThemeProvider>,
+    );
+    scrollIntoView.mockClear();
+
+    rerender(
+      <ThemeProvider theme={theme}>
+        <ResultsPanel result={result} isPending={false} error={undefined} onRetry={vi.fn()} selectedRouteId="r2" onSelectRoute={vi.fn()} />
+      </ThemeProvider>,
+    );
+
+    expect(scrollIntoView).toHaveBeenCalledWith(expect.objectContaining({ block: 'nearest' }));
+  });
 });
