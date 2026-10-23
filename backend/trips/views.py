@@ -13,11 +13,28 @@ from . import service
 from .serializers import SuggestQuerySerializer, TripAnalyzeRequestSerializer
 
 
-class AnalyzeThrottle(AnonRateThrottle):
+class ClientIpThrottle(AnonRateThrottle):
+    """Prefer Cloudflare's CF-Connecting-IP (edge-set, unspoofable) over
+    guessing the proxy hop count from X-Forwarded-For. Render sits behind
+    Cloudflare in production (every response carries `server: cloudflare`),
+    and NUM_PROXIES-based hop counting proved fragile in practice -- distinct
+    real clients kept colliding onto the same throttle identity. Falls back
+    to DRF's default XFF/REMOTE_ADDR logic (NUM_PROXIES-driven) when this
+    header is absent, e.g. local dev.
+    """
+
+    def get_ident(self, request):
+        cf_ip = request.META.get("HTTP_CF_CONNECTING_IP")
+        if cf_ip:
+            return cf_ip.strip()
+        return super().get_ident(request)
+
+
+class AnalyzeThrottle(ClientIpThrottle):
     scope = "analyze"
 
 
-class SuggestThrottle(AnonRateThrottle):
+class SuggestThrottle(ClientIpThrottle):
     scope = "suggest"
 
 
