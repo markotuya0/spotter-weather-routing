@@ -26,6 +26,10 @@ services:
         sync: false
       - key: ROUTING_PROVIDER
         value: tomtom
+      - key: OPEN_METEO_BASE_URL
+        sync: false # the Cloudflare Worker URL ending in /v1/forecast; unset = Open-Meteo directly
+      - key: OPEN_METEO_PROXY_SECRET
+        sync: false # shared secret for the Worker (same value as its PROXY_SECRET)
       - key: NUM_PROXIES
         # Render's edge is Cloudflare + Render's own LB -- 2 hops, confirmed
         # empirically (docs/09-decisions.md). This has a literal `value:`

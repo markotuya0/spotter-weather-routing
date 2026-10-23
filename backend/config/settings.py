@@ -114,6 +114,11 @@ LOGGING = {
 TOMTOM_API_KEY = os.environ.get("TOMTOM_API_KEY", "")
 HERE_API_KEY = os.environ.get("HERE_API_KEY", "")
 ROUTING_PROVIDER = os.environ.get("ROUTING_PROVIDER", "tomtom")
+# Weather goes through our Cloudflare Worker proxy in production (Open-Meteo
+# limits free-tier use per IP, and Render's egress IPs are shared; their terms
+# suggest Cloudflare Workers). Unset -> Open-Meteo's public endpoint directly.
+OPEN_METEO_BASE_URL = os.environ.get("OPEN_METEO_BASE_URL") or "https://api.open-meteo.com/v1/forecast"
+OPEN_METEO_PROXY_SECRET = os.environ.get("OPEN_METEO_PROXY_SECRET", "")
 
 # --- Trip limits (docs/04 §5.1: "all bounds from settings.TRIP_LIMITS, single place") ---
 TRIP_LIMITS = {

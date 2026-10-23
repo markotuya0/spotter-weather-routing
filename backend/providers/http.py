@@ -46,6 +46,11 @@ request_id_var: ContextVar[Optional[str]] = ContextVar("request_id", default=Non
 
 _REASON_MAX_LEN = 120
 
+# Open-Meteo's daily/hourly quota 429s ("Daily API request limit exceeded...")
+# will not clear within our backoff window, so retrying only adds latency and
+# upstream traffic. The minutely limit is transient and still retried.
+_QUOTA_EXHAUSTED_RE = re.compile(r"\b(daily|hourly)\b", re.IGNORECASE)
+
 _BARE_KEY_RE = re.compile(r"(?i)\b(key|apiKey)=\S+")
 _KEY_PARAM_RE = re.compile(r"(?i)([?&](?:key|apiKey)=)[^&]+")
 
@@ -127,6 +132,7 @@ def request_with_retry(
     provider_kind: str = "upstream",
     read_timeout_s: float = READ_TIMEOUT_S,
     operation: str = "request",
+    headers: Optional[Dict[str, str]] = None,
 ) -> HttpResult:
     """Perform one logical request with retry/backoff. Raises ProviderError on
     final failure. Never raises for a 4xx response (other than retryable 429)
@@ -156,6 +162,7 @@ def request_with_retry(
                 url,
                 params=params,
                 json=json_body,
+                headers=headers,
                 timeout=(CONNECT_TIMEOUT_S, read_timeout_s),
             )
         except requests.Timeout as exc:
@@ -195,13 +202,17 @@ def request_with_retry(
         if response.status_code == 429 or response.status_code >= 500:
             retry_after = _parse_retry_after(response.headers.get("Retry-After"))
             planned_delay = retry_after if retry_after is not None else _backoff_delay(attempt)
-            is_last_attempt = attempt == max_retries
+            reason = _upstream_reason(response)
+            quota_exhausted = (
+                response.status_code == 429 and reason is not None and _QUOTA_EXHAUSTED_RE.search(reason) is not None
+            )
+            is_last_attempt = attempt == max_retries or quota_exhausted
             budget_exceeded = total_waited_s + planned_delay > MAX_TOTAL_WAIT_BUDGET_S
 
             log(
                 response.status_code, response.headers.get("Retry-After"),
-                "rate_limited" if response.status_code == 429 else "upstream_5xx",
-                not (is_last_attempt or budget_exceeded), _upstream_reason(response),
+                "quota_exhausted" if quota_exhausted else "rate_limited" if response.status_code == 429 else "upstream_5xx",
+                not (is_last_attempt or budget_exceeded), reason,
             )
             if is_last_attempt or budget_exceeded:
                 if response.status_code == 429:

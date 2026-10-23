@@ -51,7 +51,9 @@ def get_routing_provider() -> RoutingProvider:
 
 
 def get_weather_provider() -> WeatherProvider:
-    return OpenMeteoWeather(session=_session)
+    return OpenMeteoWeather(
+        session=_session, base_url=settings.OPEN_METEO_BASE_URL, proxy_secret=settings.OPEN_METEO_PROXY_SECRET
+    )
 
 
 def get_geocoding_provider() -> GeocodingProvider:
