@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import uuid
 
+from providers.http import request_id_var
+
 
 class RequestIdMiddleware:
     def __init__(self, get_response):
@@ -12,6 +14,10 @@ class RequestIdMiddleware:
 
     def __call__(self, request):
         request.request_id = str(uuid.uuid4())
-        response = self.get_response(request)
+        token = request_id_var.set(request.request_id)
+        try:
+            response = self.get_response(request)
+        finally:
+            request_id_var.reset(token)
         response.setdefault("X-Request-ID", request.request_id)
         return response

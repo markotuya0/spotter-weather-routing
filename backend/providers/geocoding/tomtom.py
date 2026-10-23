@@ -33,7 +33,7 @@ class TomTomGeocoding:
             "countrySet": "US",
         }
         result = request_with_retry(
-            "GET", url, params=params, session=self._session, provider_kind="geocoding"
+            "GET", url, params=params, session=self._session, provider_kind="geocoding", operation="search"
         )
 
         # docs/04 §2 defines no geocoding-specific "*_UNAVAILABLE" code (only

@@ -120,6 +120,10 @@ def exception_handler(exc, context):
         return response
 
     if isinstance(exc, ProviderError):
+        logger.warning(
+            "provider_error request_id=%s kind=%s upstream_status=%s retry_after_seconds=%s",
+            request_id, exc.kind, exc.upstream_status, getattr(exc, "retry_after_seconds", None),
+        )
         http_status = _CODE_TO_STATUS.get(exc.kind, status.HTTP_502_BAD_GATEWAY)
         message = _FRIENDLY_MESSAGE.get(exc.kind, str(exc))
         body = _envelope(
