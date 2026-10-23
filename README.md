@@ -59,6 +59,10 @@ cd frontend && npm test
 cd frontend && npm run e2e
 ```
 
+### Example trip
+
+A live run on 2026-10-23 returned three routes for Denver, CO → Texarkana, TX (departure 2026-10-28 11:32 PM, 32,800 lb, checkpoints every 25 mi). All three were Low risk, and the recommendation was the shortest-duration route (986.1 mi, 14 h 11 min). Route counts, weather and the recommendation come from live providers and will change, so treat this as a snapshot rather than a test fixture.
+
 ## Environment variables
 
 See `.env.example` for the full list and inline documentation. Required: `TOMTOM_API_KEY`.
