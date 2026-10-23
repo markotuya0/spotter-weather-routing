@@ -12,6 +12,7 @@ import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Heatmap, LatLng, Route, WeatherSample } from '../../api/types';
+import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion';
 import { tokens } from '../../theme/theme';
 import { RISK_STYLES } from '../../theme/riskColors';
 import { CheckpointOverlay } from './CheckpointOverlay';
@@ -108,10 +109,24 @@ export function MapView({
   const onSelectRouteRef = useRef(onSelectRoute);
   const onSelectCheckpointRef = useRef(onSelectCheckpoint);
   const lastFittedRoutesRef = useRef<Route[] | undefined>(undefined);
+  // Set right before a map click calls back up, so the "selection changed" effects below can tell a
+  // click on the map itself (already in view — no reason to re-animate) from a card/table selection.
+  const lastRouteClickRef = useRef<string | null>(null);
+  const lastCheckpointClickRef = useRef<number | null>(null);
+  const prevRouteSelectionRef = useRef<{ routes?: Route[]; routeId: string | null }>({
+    routes: undefined,
+    routeId: null,
+  });
+  const prevCheckpointSelectionRef = useRef<{ routeId: string | null; index: number | null }>({
+    routeId: null,
+    index: null,
+  });
   const [status, setStatus] = useState<MapStatus>('loading');
   const [projectedPoint, setProjectedPoint] = useState<{ x: number; y: number } | null>(null);
+  const [containerSize, setContainerSize] = useState<{ width: number; height: number } | null>(null);
   const [heatmapVisible, setHeatmapVisible] = useState(true);
   const isMobile = useMediaQuery('(max-width:767.98px)');
+  const prefersReducedMotion = usePrefersReducedMotion();
 
   const selectedRoute = useMemo(
     () => routes?.find((route) => route.id === selectedRouteId),
@@ -304,7 +319,10 @@ export function MapView({
       for (const layerId of ROUTE_CLICK_LAYERS) {
         map.on('click', layerId, (event: MapLayerMouseEvent) => {
           const routeId = event.features?.[0]?.properties?.id as string | undefined;
-          if (routeId) onSelectRouteRef.current?.(routeId);
+          if (routeId) {
+            lastRouteClickRef.current = routeId;
+            onSelectRouteRef.current?.(routeId);
+          }
         });
         map.on('mouseenter', layerId, () => {
           map.getCanvas().style.cursor = 'pointer';
@@ -317,7 +335,10 @@ export function MapView({
       for (const layerId of CHECKPOINT_CLICK_LAYERS) {
         map.on('click', layerId, (event: MapLayerMouseEvent) => {
           const index = event.features?.[0]?.properties?.index as number | undefined;
-          if (index !== undefined) onSelectCheckpointRef.current?.(index);
+          if (index !== undefined) {
+            lastCheckpointClickRef.current = index;
+            onSelectCheckpointRef.current?.(index);
+          }
         });
         map.on('mouseenter', layerId, () => {
           map.getCanvas().style.cursor = 'pointer';
@@ -354,9 +375,9 @@ export function MapView({
         [west, south],
         [east, north],
       ],
-      { padding: 48, duration: 500 },
+      { padding: 48, duration: prefersReducedMotion ? 0 : 500 },
     );
-  }, []);
+  }, [prefersReducedMotion]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -370,6 +391,30 @@ export function MapView({
       fitToRoutes(routes);
     }
   }, [status, routes, selectedRouteId, fitToRoutes]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const prev = prevRouteSelectionRef.current;
+    const sameRouteList = prev.routes === routes;
+    prevRouteSelectionRef.current = { routes, routeId: selectedRouteId };
+    if (status !== 'ready' || !map) return;
+    // Skip the very first time a route list/selection shows up (handled by the fit-all-routes effect
+    // above) and skip when the map's own click just produced this selection (it is already in view).
+    if (!sameRouteList || prev.routeId === selectedRouteId) return;
+    if (lastRouteClickRef.current === selectedRouteId) {
+      lastRouteClickRef.current = null;
+      return;
+    }
+    if (!selectedRoute) return;
+    const [west, south, east, north] = selectedRoute.geometry.bbox;
+    map.fitBounds(
+      [
+        [west, south],
+        [east, north],
+      ],
+      { padding: 64, duration: prefersReducedMotion ? 0 : 500 },
+    );
+  }, [status, routes, selectedRouteId, selectedRoute, prefersReducedMotion]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -412,6 +457,28 @@ export function MapView({
 
   useEffect(() => {
     const map = mapRef.current;
+    const prev = prevCheckpointSelectionRef.current;
+    const sameRoute = prev.routeId === selectedRouteId;
+    prevCheckpointSelectionRef.current = { routeId: selectedRouteId, index: selectedCheckpointIndex };
+    if (status !== 'ready' || !map || selectedCheckpointIndex === null || !selectedCheckpoint) return;
+    // Skip when nothing actually changed, when the route was just swapped (the route-fit effect
+    // already reframes the view), or when this selection came from clicking the marker itself.
+    if (sameRoute && prev.index === selectedCheckpointIndex) return;
+    if (lastCheckpointClickRef.current === selectedCheckpointIndex) {
+      lastCheckpointClickRef.current = null;
+      return;
+    }
+    map.flyTo({
+      center: [selectedCheckpoint.lng, selectedCheckpoint.lat],
+      // Leaves room below the map's vertical center for the popup, which anchors above the point.
+      offset: isMobile ? [0, 0] : [0, 90],
+      zoom: Math.max(map.getZoom(), 7),
+      duration: prefersReducedMotion ? 0 : 600,
+    });
+  }, [status, selectedRouteId, selectedCheckpointIndex, selectedCheckpoint, isMobile, prefersReducedMotion]);
+
+  useEffect(() => {
+    const map = mapRef.current;
     if (status !== 'ready' || !map || !selectedCheckpoint) {
       setProjectedPoint(null);
       return;
@@ -419,13 +486,19 @@ export function MapView({
     function updatePoint() {
       const { x, y } = map!.project([selectedCheckpoint!.lng, selectedCheckpoint!.lat]);
       setProjectedPoint({ x, y });
+      const container = containerRef.current;
+      if (container) {
+        setContainerSize({ width: container.clientWidth, height: container.clientHeight });
+      }
     }
     updatePoint();
     map.on('move', updatePoint);
     map.on('zoom', updatePoint);
+    window.addEventListener('resize', updatePoint);
     return () => {
       map.off('move', updatePoint);
       map.off('zoom', updatePoint);
+      window.removeEventListener('resize', updatePoint);
     };
   }, [status, selectedCheckpoint]);
 
@@ -447,7 +520,8 @@ export function MapView({
       )}
       {status === 'ready' && heatmap && (
         <Button
-          variant="outlined"
+          variant={heatmapVisible ? 'contained' : 'outlined'}
+          color={heatmapVisible ? 'primary' : 'inherit'}
           size="small"
           aria-pressed={heatmapVisible}
           onClick={() => setHeatmapVisible((visible) => !visible)}
@@ -455,7 +529,7 @@ export function MapView({
             position: 'absolute',
             top: 12,
             left: 12,
-            backgroundColor: 'background.paper',
+            backgroundColor: heatmapVisible ? undefined : 'background.paper',
             '&:focus-visible': { outline: '2px solid', outlineColor: tokens.brand, outlineOffset: 2 },
           }}
         >
@@ -484,13 +558,16 @@ export function MapView({
           <CircularProgress aria-label="Loading map" />
         </Box>
       )}
-      {status === 'ready' && selectedCheckpoint && (
+      {/* On mobile, CheckpointDrawer's own bottom sheet owns the list/details views (mutually
+          exclusive), so a second popup here would overlap it; skip rendering this one there. */}
+      {status === 'ready' && selectedCheckpoint && !isMobile && (
         <CheckpointOverlay
+          key={selectedCheckpoint.index}
           checkpoint={selectedCheckpoint}
           weatherSample={weatherSample}
           loadWeightLb={loadWeightLb}
           point={projectedPoint}
-          isMobile={isMobile}
+          containerSize={containerSize}
           onClose={() => onSelectCheckpointRef.current?.(null)}
         />
       )}

@@ -19,6 +19,8 @@ interface RouteCardProps {
   onSelect: (routeId: string) => void;
   /** Recommended route's duration, for a "+N min vs recommended" comparison on other cards. */
   recommendedDurationSeconds?: number;
+  /** Lets the sidebar scroll the selected card into view when the selection came from the map. */
+  rootRef?: (el: HTMLLIElement | null) => void;
 }
 
 export function RouteCard({
@@ -28,6 +30,7 @@ export function RouteCard({
   selected,
   onSelect,
   recommendedDurationSeconds,
+  rootRef,
 }: RouteCardProps) {
   const { summary, ranking_keys: keys, eligibility } = route;
   const isRecommended = isTopPick && isConfirmedSafe;
@@ -38,6 +41,7 @@ export function RouteCard({
 
   return (
     <Paper
+      ref={rootRef}
       component="li"
       variant="outlined"
       aria-current={selected ? 'true' : undefined}

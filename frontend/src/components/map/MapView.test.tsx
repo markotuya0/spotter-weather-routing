@@ -17,6 +17,7 @@ const { mapInstances, MapMock } = vi.hoisted(() => {
     sources: Record<string, { data: unknown; setData: (d: unknown) => void }> = {};
     layers: Array<{ id: string }> = [];
     fitBoundsCalls: Array<{ bounds: unknown; options: unknown }> = [];
+    flyToCalls: Array<Record<string, unknown>> = [];
     canvasStyle = { cursor: '' };
 
     constructor(options: Record<string, unknown>) {
@@ -65,6 +66,14 @@ const { mapInstances, MapMock } = vi.hoisted(() => {
 
     fitBounds(bounds: unknown, options: unknown) {
       this.fitBoundsCalls.push({ bounds, options });
+    }
+
+    flyTo(options: Record<string, unknown>) {
+      this.flyToCalls.push(options);
+    }
+
+    getZoom() {
+      return 6;
     }
 
     project(_lngLat: [number, number]) {
@@ -170,8 +179,10 @@ describe('MapView', () => {
     ]);
   });
 
-  it('does not refit when only the selection changes', async () => {
-    const routes = [buildRoute({ id: 'r1' }), buildRoute({ id: 'r2' })];
+  it('reframes to just the newly selected route when the selection changes from a card (not a fresh route list)', async () => {
+    const routeA = buildRoute({ id: 'r1', geometry: { encoding: 'polyline5', points: '', bbox: [-110, 38, -100, 42] } });
+    const routeB = buildRoute({ id: 'r2', geometry: { encoding: 'polyline5', points: '', bbox: [-105, 35, -95, 40] } });
+    const routes = [routeA, routeB];
 
     const { rerender } = render(<MapView routes={routes} selectedRouteId="r1" />);
     const instance = mapInstances[0]!;
@@ -180,9 +191,31 @@ describe('MapView', () => {
 
     rerender(<MapView routes={routes} selectedRouteId="r2" />);
 
-    expect(instance.fitBoundsCalls).toHaveLength(1);
+    expect(instance.fitBoundsCalls).toHaveLength(2);
+    expect(instance.fitBoundsCalls[1]!.bounds).toEqual([
+      [-105, 35],
+      [-95, 40],
+    ]);
     const routesData = instance.sources.routes!.data as { features: Array<{ properties: { id: string; selected: boolean } }> };
     expect(routesData.features.find((f) => f.properties.id === 'r2')?.properties.selected).toBe(true);
+  });
+
+  it('does not re-fit the map when a route selection came from clicking the map itself', async () => {
+    const routeA = buildRoute({ id: 'r1' });
+    const routeB = buildRoute({ id: 'r2' });
+    const routes = [routeA, routeB];
+    const onSelectRoute = vi.fn();
+
+    const { rerender } = render(<MapView routes={routes} selectedRouteId="r1" onSelectRoute={onSelectRoute} />);
+    const instance = mapInstances[0]!;
+    instance.emit('load');
+    await waitFor(() => expect(instance.fitBoundsCalls).toHaveLength(1));
+
+    instance.emit('click', 'routes-unselected', { features: [{ properties: { id: 'r2' } }] });
+    expect(onSelectRoute).toHaveBeenCalledWith('r2');
+    rerender(<MapView routes={routes} selectedRouteId="r2" onSelectRoute={onSelectRoute} />);
+
+    expect(instance.fitBoundsCalls).toHaveLength(1);
   });
 
   it('selects a route when its line is clicked', async () => {
@@ -250,6 +283,89 @@ describe('MapView', () => {
 
     instance.emit('click', 'checkpoints-major', { features: [{ properties: { index: 3 } }] });
     expect(onSelectCheckpoint).toHaveBeenCalledWith(3);
+  });
+
+  it('flies to a checkpoint picked from outside the map (e.g. the sidebar table)', async () => {
+    const checkpoint = buildCheckpoint({ index: 4, lat: 41.1, lng: -99.4 });
+    const route = buildRoute({ id: 'r1', checkpoints: [checkpoint] });
+
+    const { rerender } = render(<MapView routes={[route]} selectedRouteId="r1" selectedCheckpointIndex={null} />);
+    const instance = mapInstances[0]!;
+    instance.emit('load');
+    await waitFor(() => expect(instance.sources['checkpoints']!.setData).toHaveBeenCalled());
+
+    rerender(<MapView routes={[route]} selectedRouteId="r1" selectedCheckpointIndex={4} />);
+
+    expect(instance.flyToCalls).toHaveLength(1);
+    expect(instance.flyToCalls[0]!.center).toEqual([-99.4, 41.1]);
+  });
+
+  it('does not fly the map when the checkpoint selection came from clicking its own marker', async () => {
+    const checkpoint = buildCheckpoint({ index: 4, lat: 41.1, lng: -99.4 });
+    const route = buildRoute({ id: 'r1', checkpoints: [checkpoint] });
+    const onSelectCheckpoint = vi.fn();
+
+    const { rerender } = render(
+      <MapView
+        routes={[route]}
+        selectedRouteId="r1"
+        selectedCheckpointIndex={null}
+        onSelectCheckpoint={onSelectCheckpoint}
+      />,
+    );
+    const instance = mapInstances[0]!;
+    instance.emit('load');
+    await waitFor(() => expect(instance.sources['checkpoints']!.setData).toHaveBeenCalled());
+
+    instance.emit('click', 'checkpoints-major', { features: [{ properties: { index: 4 } }] });
+    expect(onSelectCheckpoint).toHaveBeenCalledWith(4);
+    rerender(
+      <MapView
+        routes={[route]}
+        selectedRouteId="r1"
+        selectedCheckpointIndex={4}
+        onSelectCheckpoint={onSelectCheckpoint}
+      />,
+    );
+
+    expect(instance.flyToCalls).toHaveLength(0);
+  });
+
+  it('closes the checkpoint popup on Escape', async () => {
+    const checkpoint = buildCheckpoint({ index: 1 });
+    const route = buildRoute({ id: 'r1', checkpoints: [checkpoint] });
+    const onSelectCheckpoint = vi.fn();
+
+    const { getByRole } = render(
+      <MapView routes={[route]} selectedRouteId="r1" selectedCheckpointIndex={1} onSelectCheckpoint={onSelectCheckpoint} />,
+    );
+    mapInstances[0]!.emit('load');
+
+    await waitFor(() => expect(getByRole('dialog', { name: 'Checkpoint details' })).toBeInTheDocument());
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    expect(onSelectCheckpoint).toHaveBeenCalledWith(null);
+  });
+
+  it('keeps the checkpoint popup inside the map viewport near the top edge', async () => {
+    const checkpoint = buildCheckpoint({ index: 1 });
+    const route = buildRoute({ id: 'r1', checkpoints: [checkpoint] });
+
+    const { getByRole, container } = render(
+      <MapView routes={[route]} selectedRouteId="r1" selectedCheckpointIndex={1} />,
+    );
+    const instance = mapInstances[0]!;
+    instance.emit('load');
+    vi.spyOn(instance, 'project').mockReturnValue({ x: 100, y: 5 });
+
+    const mapBox = container.querySelector('[data-testid="maplibre-container"]')!;
+    vi.spyOn(mapBox, 'clientWidth', 'get').mockReturnValue(400);
+    vi.spyOn(mapBox, 'clientHeight', 'get').mockReturnValue(300);
+    instance.emit('move');
+
+    const dialog = await waitFor(() => getByRole('dialog', { name: 'Checkpoint details' }));
+    const top = Number.parseFloat(getComputedStyle(dialog).top);
+    expect(top).toBeGreaterThanOrEqual(56);
   });
 
   describe('conditions heatmap', () => {
