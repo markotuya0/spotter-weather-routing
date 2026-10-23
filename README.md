@@ -2,6 +2,7 @@
 
 **Live app**: https://spotter-frontend-gqvr.onrender.com
 **Backend API**: https://spotter-backend-m7oc.onrender.com/api (health check: `/api/health`)
+**Walkthrough video**: https://www.loom.com/share/2919143ec6574580a673f460673fecdf (about 5 minutes; the recording hit Loom's 5-minute limit before the technical overview, which is covered in [Stack](#stack) below)
 
 A trip-planning tool for truck dispatch: given an origin, destination, departure time, load
 weight and checkpoint spacing, it returns three real routing alternatives, samples weather at
@@ -21,7 +22,12 @@ planning/spec set this implementation was built from — read `docs/01-requireme
 - **Frontend**: React + TypeScript (Vite), Material UI, TanStack Query, MapLibre GL (OpenFreeMap
   tiles).
 - **Providers**: TomTom Routing + Geocoding (truck profile, 3 alternative routes), Open-Meteo
-  (forecast weather, no key required).
+  (forecast weather, no key required). Weather requests go through a small Cloudflare Worker
+  that forwards them to Open-Meteo, to help with quota reliability.
+- **Where the rules live**: risk calculation, load-weight rules and route ranking are in the
+  Python `domain/` layer, separate from the web API, so they can be tested on their own.
+- **Tests**: backend unit and API tests (`pytest`), frontend component tests (`vitest`), end-to-end
+  tests (Playwright), and tests for the weather proxy Worker.
 
 See `docs/03-architecture.md` for the full stack rationale, module boundaries and data flow.
 
@@ -124,8 +130,10 @@ Full rules, worked edge cases and the boundary test catalogue: `docs/05-routing-
   usually just looks like a longer first load rather than an error — but if you're
   trying it cold, a quick visit to the health check first will warm it up ahead of
   time: https://spotter-backend-m7oc.onrender.com/api/health
-- The walkthrough recording (G7, `docs/08-execution-plan.md`) is tracked separately and
-  not yet complete as of this commit.
+- **Fewer than three routes**: TomTom returns up to three alternatives, but near-duplicates
+  (routes overlapping 95% or more) and detours (over 1.5× the fastest time or shortest distance)
+  are removed first. If fewer than three distinct routes remain, the results show a
+  `ROUTES_FEWER_THAN_3` note with how many are available. It's informational, not an error.
 
 ## API
 
@@ -141,7 +149,9 @@ error code in `docs/04-api-contracts.md`:
 ```
 backend/    Django project: domain/ (pure rules engine), providers/, trips/ (API), config/
 frontend/   React + TS app: src/, e2e/ (Playwright)
+worker/     Cloudflare Worker that proxies Open-Meteo requests (open-meteo-proxy/)
 docs/       Full planning/spec set (requirements → architecture → decisions)
 tests/      Shared fixtures (e.g. Gate 0 provider-validation evidence)
 assessment/ The original spec PDF
+.github/    CI workflows (tests and build on every push and pull request)
 ```
