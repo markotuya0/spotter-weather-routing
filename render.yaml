@@ -27,7 +27,13 @@ services:
       - key: ROUTING_PROVIDER
         value: tomtom
       - key: NUM_PROXIES
-        value: "1"
+        # Render's edge is Cloudflare + Render's own LB -- 2 hops, confirmed
+        # empirically (docs/09-decisions.md). This has a literal `value:`
+        # (not `sync: false`) deliberately: it must stay version-controlled
+        # so a Blueprint resync can't silently revert it to "1" again, which
+        # previously collapsed distinct anonymous clients onto one shared
+        # throttle identity and caused false-positive 429s.
+        value: "2"
 
   - type: web
     name: spotter-frontend
