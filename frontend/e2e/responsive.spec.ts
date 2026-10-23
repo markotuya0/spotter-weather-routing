@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { mockApi, submitDenverOmaha } from './support';
 
-for (const width of [360, 768, 1280]) {
+for (const width of [320, 360, 768, 1280]) {
   test(`at ${width}px the results have no horizontal overflow, a usable map, and no overlapping controls`, async ({ page }) => {
     await page.setViewportSize({ width, height: 800 });
     await mockApi(page);

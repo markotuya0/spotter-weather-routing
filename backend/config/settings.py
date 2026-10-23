@@ -27,6 +27,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "django.middleware.security.SecurityMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.gzip.GZipMiddleware",
@@ -55,6 +56,19 @@ CACHES = {
 CORS_ALLOWED_ORIGINS = [
     o.strip() for o in os.environ.get("CORS_ALLOWED_ORIGINS", "http://localhost:5173").split(",") if o.strip()
 ]
+
+# M7 release prep: production (DEBUG=0) runs behind Render's TLS-terminating
+# edge proxy, so Django must trust its X-Forwarded-Proto header to know the
+# original request was HTTPS, and should enforce HTTPS/HSTS itself since
+# there is no in-app session/CSRF cookie use to otherwise force it. Off in
+# local dev (DEBUG=1) so http://localhost keeps working without a redirect loop.
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SECURE_SSL_REDIRECT = True
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
 
 REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
