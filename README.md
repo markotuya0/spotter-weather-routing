@@ -1,5 +1,8 @@
 # Spotter — Weather-Aware Truck Routing
 
+**Live app**: https://spotter-frontend-gqvr.onrender.com
+**Backend API**: https://spotter-backend-m7oc.onrender.com/api (health check: `/api/health`)
+
 A trip-planning tool for truck dispatch: given an origin, destination, departure time, load
 weight and checkpoint spacing, it returns three real routing alternatives, samples weather at
 each checkpoint's **arrival time** (not departure time), classifies risk on a five-level scale,
@@ -111,8 +114,10 @@ Full rules, worked edge cases and the boundary test catalogue: `docs/05-routing-
 - A handful of interpretive choices not literal in the PDF (e.g. inclusive/exclusive boundary
   reading, the eligibility/ranking split) are recorded as **ASSUMPTION**/**DERIVED**/**CHOICE**
   in `docs/01-requirements.md` §6 and `docs/09-decisions.md` §3–4, with the reasoning for each.
-- Deployment (hosted URL) and the walkthrough recording are tracked separately in
-  `docs/08-execution-plan.md` (M7/M8) and are not yet complete as of this commit.
+- Deployed on Render's free tier (two services from `render.yaml`): the backend spins
+  down after ~15 min idle, so the first request after a gap can take 30-60s to wake up.
+- The walkthrough recording (G7, `docs/08-execution-plan.md`) is tracked separately and
+  not yet complete as of this commit.
 
 ## API
 
