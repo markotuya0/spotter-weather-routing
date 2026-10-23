@@ -1,3 +1,5 @@
+import Alert from '@mui/material/Alert';
+import AlertTitle from '@mui/material/AlertTitle';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Collapse from '@mui/material/Collapse';
@@ -71,9 +73,17 @@ export function ResultsPanel({
     const apiError = error instanceof ApiError ? error : null;
     if (apiError) return <ApiErrorAlert error={apiError} onRetry={onRetry} />;
     return (
-      <Stack role="alert">
-        <Typography color="error">Something went wrong. Please try again.</Typography>
-      </Stack>
+      <Alert severity="error" role="alert">
+        <AlertTitle>Couldn't reach the server</AlertTitle>
+        <Stack spacing={1}>
+          <Typography variant="body2">
+            This can happen if the server was briefly waking up from idle. Try again in a few seconds.
+          </Typography>
+          <Button size="small" variant="outlined" onClick={onRetry}>
+            Retry
+          </Button>
+        </Stack>
+      </Alert>
     );
   }
 
