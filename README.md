@@ -116,6 +116,10 @@ Full rules, worked edge cases and the boundary test catalogue: `docs/05-routing-
   in `docs/01-requirements.md` §6 and `docs/09-decisions.md` §3–4, with the reasoning for each.
 - Deployed on Render's free tier (two services from `render.yaml`): the backend spins
   down after ~15 min idle, so the first request after a gap can take 30-60s to wake up.
+  The frontend retries a cold-start connection failure once automatically, so this
+  usually just looks like a longer first load rather than an error — but if you're
+  trying it cold, a quick visit to the health check first will warm it up ahead of
+  time: https://spotter-backend-m7oc.onrender.com/api/health
 - The walkthrough recording (G7, `docs/08-execution-plan.md`) is tracked separately and
   not yet complete as of this commit.
 

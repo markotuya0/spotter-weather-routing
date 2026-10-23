@@ -20,6 +20,21 @@ export class ApiError extends Error {
   }
 }
 
+// Render's free tier spins the backend down after ~15 min idle; the first
+// request after a gap can drop the connection mid-handshake while it wakes
+// (fetch throws TypeError, not an HTTP error). One silent retry after a short
+// delay covers that case so a cold start doesn't surface as a visible error.
+async function withColdStartRetry<T>(request: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+  try {
+    return await request();
+  } catch (err) {
+    if (signal?.aborted || (err instanceof DOMException && err.name === 'AbortError')) throw err;
+    if (!(err instanceof TypeError)) throw err;
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    return request();
+  }
+}
+
 async function parseError(response: Response): Promise<ApiError> {
   try {
     const body = (await response.json()) as ApiErrorBody;
@@ -39,18 +54,22 @@ async function parseError(response: Response): Promise<ApiError> {
 export async function suggestPlaces(query: string, signal?: AbortSignal): Promise<PlaceSuggestResponse> {
   const url = new URL(`${BASE_URL}/places/suggest`, window.location.origin);
   url.searchParams.set('q', query);
-  const response = await fetch(url, { signal });
-  if (!response.ok) throw await parseError(response);
-  return (await response.json()) as PlaceSuggestResponse;
+  return withColdStartRetry(async () => {
+    const response = await fetch(url, { signal });
+    if (!response.ok) throw await parseError(response);
+    return (await response.json()) as PlaceSuggestResponse;
+  }, signal);
 }
 
 export async function analyzeTrip(input: TripInput, signal?: AbortSignal): Promise<AnalysisResult> {
-  const response = await fetch(`${BASE_URL}/trips/analyze`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
-    signal,
-  });
-  if (!response.ok) throw await parseError(response);
-  return (await response.json()) as AnalysisResult;
+  return withColdStartRetry(async () => {
+    const response = await fetch(`${BASE_URL}/trips/analyze`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+      signal,
+    });
+    if (!response.ok) throw await parseError(response);
+    return (await response.json()) as AnalysisResult;
+  }, signal);
 }
