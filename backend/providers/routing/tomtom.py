@@ -51,7 +51,7 @@ class TomTomRouting:
         }
         try:
             result = request_with_retry(
-                "GET", url, params=params, session=self._session, provider_kind="routing",
+                "GET", url, params=params, session=self._session, provider_kind="routing", operation="calculateRoute",
                 read_timeout_s=READ_TIMEOUT_S_ROUTING,
             )
         except ProviderError:

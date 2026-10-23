@@ -10,10 +10,12 @@ import logging
 import random
 import re
 import time
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any, Dict, Optional
+from urllib.parse import urlparse
 
 import requests
 
@@ -38,6 +40,13 @@ BACKOFF_BASE_S = 0.5
 MAX_RETRY_AFTER_S = 20.0
 MAX_TOTAL_WAIT_BUDGET_S = 20.0
 
+# Set per request by trips.middleware.RequestIdMiddleware so provider logs can
+# be correlated with the X-Request-ID the client sees.
+request_id_var: ContextVar[Optional[str]] = ContextVar("request_id", default=None)
+
+_REASON_MAX_LEN = 120
+
+_BARE_KEY_RE = re.compile(r"(?i)\b(key|apiKey)=\S+")
 _KEY_PARAM_RE = re.compile(r"(?i)([?&](?:key|apiKey)=)[^&]+")
 
 
@@ -47,6 +56,38 @@ def redact_url(url: str) -> str:
     logging and error messages (docs/03 §9, M2 security closeout C-2).
     """
     return _KEY_PARAM_RE.sub(r"\1REDACTED", url)
+
+
+def _upstream_reason(response: requests.Response) -> Optional[str]:
+    """Short, key-redacted reason string from a provider error body (Open-Meteo
+    `reason`, TomTom `detailedError.code`/`error`), for diagnostics only. Never
+    the raw body, so nothing user-specific or secret is logged."""
+    try:
+        body = response.json()
+    except ValueError:
+        return None
+    if not isinstance(body, dict):
+        return None
+    reason = body.get("reason") or body.get("error") or (body.get("detailedError") or {}).get("code")
+    if not isinstance(reason, str):
+        return None
+    return _BARE_KEY_RE.sub(r"\1=REDACTED", redact_url(reason))[:_REASON_MAX_LEN]
+
+
+def _log_attempt(
+    *, provider: str, operation: str, attempt: int, max_attempts: int, status: Optional[int],
+    retry_after: Optional[str], attempt_ms: float, total_ms: float, category: str,
+    will_retry: bool, reason: Optional[str] = None,
+) -> None:
+    """One structured key=value line per provider HTTP attempt. Host only (no
+    URL/query, so no API key or coordinates), no client identity."""
+    logger.info(
+        "provider_call request_id=%s provider=%s operation=%s attempt=%d/%d status=%s "
+        "retry_after=%s attempt_ms=%d total_ms=%d category=%s will_retry=%s reason=%s",
+        request_id_var.get(), provider, operation, attempt + 1, max_attempts,
+        status if status is not None else "-", retry_after or "-", attempt_ms, total_ms,
+        category, str(will_retry).lower(), reason or "-",
+    )
 
 
 class ProviderError(Exception):
@@ -85,6 +126,7 @@ def request_with_retry(
     max_retries: int = MAX_RETRIES,
     provider_kind: str = "upstream",
     read_timeout_s: float = READ_TIMEOUT_S,
+    operation: str = "request",
 ) -> HttpResult:
     """Perform one logical request with retry/backoff. Raises ProviderError on
     final failure. Never raises for a 4xx response (other than retryable 429)
@@ -95,8 +137,19 @@ def request_with_retry(
     attempt = 0
     last_exc: Optional[Exception] = None
     total_waited_s = 0.0
+    provider = urlparse(url).hostname or "unknown"
+    call_started = time.monotonic()
+
+    def log(status, retry_after, category, will_retry, reason=None):
+        now = time.monotonic()
+        _log_attempt(
+            provider=provider, operation=operation, attempt=attempt, max_attempts=max_retries + 1,
+            status=status, retry_after=retry_after, attempt_ms=(now - attempt_started) * 1000,
+            total_ms=(now - call_started) * 1000, category=category, will_retry=will_retry, reason=reason,
+        )
 
     while attempt <= max_retries:
+        attempt_started = time.monotonic()
         try:
             response = sess.request(
                 method,
@@ -108,7 +161,9 @@ def request_with_retry(
         except requests.Timeout as exc:
             last_exc = exc
             planned_delay = _backoff_delay(attempt)
-            if attempt == max_retries or total_waited_s + planned_delay > MAX_TOTAL_WAIT_BUDGET_S:
+            will_retry = not (attempt == max_retries or total_waited_s + planned_delay > MAX_TOTAL_WAIT_BUDGET_S)
+            log(None, None, "timeout", will_retry)
+            if not will_retry:
                 raise ProviderError(
                     "UPSTREAM_TIMEOUT", f"{provider_kind} request timed out", retryable=True
                 ) from None
@@ -124,7 +179,9 @@ def request_with_retry(
             safe_message = redact_url(str(exc))
             last_exc = exc
             planned_delay = _backoff_delay(attempt)
-            if attempt == max_retries or total_waited_s + planned_delay > MAX_TOTAL_WAIT_BUDGET_S:
+            will_retry = not (attempt == max_retries or total_waited_s + planned_delay > MAX_TOTAL_WAIT_BUDGET_S)
+            log(None, None, f"connection_error:{type(exc).__name__}", will_retry)
+            if not will_retry:
                 raise ProviderError(
                     f"{provider_kind.upper()}_UNAVAILABLE",
                     f"{provider_kind} request failed: {safe_message}",
@@ -141,6 +198,11 @@ def request_with_retry(
             is_last_attempt = attempt == max_retries
             budget_exceeded = total_waited_s + planned_delay > MAX_TOTAL_WAIT_BUDGET_S
 
+            log(
+                response.status_code, response.headers.get("Retry-After"),
+                "rate_limited" if response.status_code == 429 else "upstream_5xx",
+                not (is_last_attempt or budget_exceeded), _upstream_reason(response),
+            )
             if is_last_attempt or budget_exceeded:
                 if response.status_code == 429:
                     raise ProviderError(
@@ -161,6 +223,10 @@ def request_with_retry(
             attempt += 1
             continue
 
+        log(
+            response.status_code, None, "ok" if response.status_code < 400 else "client_error", False,
+            _upstream_reason(response) if response.status_code >= 400 else None,
+        )
         try:
             body = response.json()
         except ValueError:

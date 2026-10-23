@@ -113,7 +113,7 @@ class OpenMeteoWeather:
             "end_date": end.isoformat(),
         }
         result = request_with_retry(
-            "GET", BASE_URL, params=params, session=self._session, provider_kind="weather"
+            "GET", BASE_URL, params=params, session=self._session, provider_kind="weather", operation="forecast"
         )
         if result.status_code >= 400:
             raise ProviderError(
