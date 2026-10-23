@@ -14,7 +14,13 @@ import { ErrorBoundary } from './components/common/ErrorBoundary.tsx';
 import './index.css';
 import { theme } from './theme/theme.ts';
 
-const queryClient = new QueryClient();
+// retry: false — api/client.ts already retries once on cold-start connection
+// failures; React Query's own default (3 retries with backoff) would stack
+// on top of that per debounced keystroke and multiply into a request burst
+// large enough to trip the API's own rate limiting.
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { retry: false } },
+});
 
 const rootElement = document.getElementById('root');
 if (!rootElement) throw new Error('Root element not found');
