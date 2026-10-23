@@ -1,0 +1,5 @@
+name = "spotter-open-meteo-proxy"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+# PROXY_SECRET is a secret: set it with `wrangler secret put PROXY_SECRET`.

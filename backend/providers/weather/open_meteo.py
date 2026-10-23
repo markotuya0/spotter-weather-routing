@@ -61,9 +61,22 @@ _LIMITER = _TokenBucket(RATE_LIMIT_LOCATIONS_PER_MIN)
 
 
 class OpenMeteoWeather:
-    def __init__(self, session: Optional[requests.Session] = None, limiter: Optional[_TokenBucket] = None):
+    """`base_url` defaults to Open-Meteo's public endpoint; in production it points
+    at our Cloudflare Worker proxy (worker/open-meteo-proxy), which authenticates
+    with `proxy_secret` sent as X-Proxy-Secret. The secret is only ever a header:
+    request_with_retry logs host/operation/status, never headers or URLs."""
+
+    def __init__(
+        self,
+        session: Optional[requests.Session] = None,
+        limiter: Optional[_TokenBucket] = None,
+        base_url: str = BASE_URL,
+        proxy_secret: str = "",
+    ):
         self._session = session or requests.Session()
         self._limiter = limiter or _LIMITER
+        self._base_url = base_url
+        self._headers = {"X-Proxy-Secret": proxy_secret} if proxy_secret else None
 
     def hourly(
         self, points: Sequence[LatLng], start: date, end: date
@@ -112,9 +125,21 @@ class OpenMeteoWeather:
             "start_date": start.isoformat(),
             "end_date": end.isoformat(),
         }
-        result = request_with_retry(
-            "GET", BASE_URL, params=params, session=self._session, provider_kind="weather", operation="forecast"
-        )
+        try:
+            result = request_with_retry(
+                "GET", self._base_url, params=params, session=self._session, provider_kind="weather",
+                operation="forecast", headers=self._headers,
+            )
+        except ProviderError as exc:
+            if exc.kind != "RATE_LIMITED":
+                raise
+            # An upstream weather quota/rate limit is a weather-provider outage
+            # from the client's point of view, not the client being throttled
+            # (docs/04 §5.4: total weather failure -> WEATHER_UNAVAILABLE).
+            raise ProviderError(
+                "WEATHER_UNAVAILABLE", "Open-Meteo rate limited", retryable=exc.retryable,
+                upstream_status=exc.upstream_status, retry_after_seconds=exc.retry_after_seconds,
+            ) from None
         if result.status_code >= 400:
             raise ProviderError(
                 "WEATHER_UNAVAILABLE", "Open-Meteo rejected the request", retryable=True, upstream_status=result.status_code
