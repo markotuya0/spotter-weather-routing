@@ -17,6 +17,12 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-insecure-secret-key-do-not
 # fails closed (Django raises DisallowedHost) instead of accepting any Host.
 DEBUG = os.environ.get("DEBUG", "0") == "1"
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if h.strip()]
+# Render always injects this with the service's actual (possibly
+# suffixed) hostname, so a manually-typed ALLOWED_HOSTS can never drift
+# from the real one on Render specifically.
+_render_host = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+if _render_host and _render_host not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(_render_host)
 
 INSTALLED_APPS = [
     "django.contrib.contenttypes",
