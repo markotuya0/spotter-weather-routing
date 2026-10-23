@@ -160,6 +160,10 @@ export function TripForm({ onSubmit, isSubmitting, initialValues }: TripFormProp
       >
         {isSubmitting ? 'Analyzing…' : 'Analyze trip'}
       </Button>
+
+      <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center' }}>
+        Looking for a route to explore? Try Denver, CO → Texarkana, TX to compare alternative paths.
+      </Typography>
     </Stack>
   );
 }
