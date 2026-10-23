@@ -82,8 +82,8 @@ REST_FRAMEWORK = {
     "EXCEPTION_HANDLER": "trips.errors.exception_handler",
     "DEFAULT_THROTTLE_CLASSES": [],
     "DEFAULT_THROTTLE_RATES": {
-        "analyze": "20/min",
-        "suggest": "60/min",
+        "analyze": "60/min",
+        "suggest": "120/min",
     },
     # M2 security closeout W-2: DRF's default (NUM_PROXIES=None) blindly
     # trusts the entire client-supplied X-Forwarded-For header as the
