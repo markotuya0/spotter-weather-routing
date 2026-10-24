@@ -81,7 +81,7 @@ export function AppShell({ panel, mapRegion, summaryChip }: AppShellProps) {
           id="results-panel"
           sx={{
             position: 'relative',
-            width: panelCollapsed ? 0 : isRowLayout ? (isTablet ? 340 : 400) : '100%',
+            width: panelCollapsed ? 0 : isRowLayout ? (isTablet ? 380 : 480) : '100%',
             flexShrink: 0,
             p: panelCollapsed ? 0 : 2,
             pt: panelCollapsed ? 0 : isTablet ? 5 : 2,

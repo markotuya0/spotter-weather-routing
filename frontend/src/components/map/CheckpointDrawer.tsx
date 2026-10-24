@@ -12,7 +12,7 @@ import Stack from '@mui/material/Stack';
 import SwipeableDrawer from '@mui/material/SwipeableDrawer';
 import Typography from '@mui/material/Typography';
 import useMediaQuery from '@mui/material/useMediaQuery';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { Checkpoint, WeatherSample } from '../../api/types';
 import { CheckpointDetails } from './CheckpointDetails';
 import { CheckpointTable } from './CheckpointTable';
@@ -48,9 +48,12 @@ export function CheckpointDrawer({
   // reveal the collapsed/closed panel whenever a selection lands here from outside it (adjusting
   // state during render instead of an effect — https://react.dev/learn/you-might-not-need-an-effect).
   const [lastSelectedIndex, setLastSelectedIndex] = useState(selectedIndex);
+  // A row picked inside the tablet drawer closes it, so it must not count as an outside selection.
+  const [rowPickedIndex, setRowPickedIndex] = useState<number | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
   if (selectedIndex !== lastSelectedIndex) {
     setLastSelectedIndex(selectedIndex);
-    if (selectedIndex !== null) {
+    if (selectedIndex !== null && selectedIndex !== rowPickedIndex) {
       setOpen(true);
       setForceList(false);
     }
@@ -63,6 +66,19 @@ export function CheckpointDrawer({
       weatherSamples={weatherSamples}
       selectedIndex={selectedIndex}
       onSelectCheckpoint={onSelectCheckpoint}
+    />
+  );
+  const filledTable = (
+    <CheckpointTable
+      checkpoints={checkpoints}
+      weatherSamples={weatherSamples}
+      selectedIndex={selectedIndex}
+      onSelectCheckpoint={(index) => {
+        setRowPickedIndex(index);
+        setOpen(false);
+        onSelectCheckpoint(index);
+      }}
+      fill
     />
   );
 
@@ -136,6 +152,7 @@ export function CheckpointDrawer({
     return (
       <>
         <Button
+          ref={triggerRef}
           variant="outlined"
           size="small"
           onClick={() => setOpen(true)}
@@ -143,12 +160,24 @@ export function CheckpointDrawer({
         >
           {label}
         </Button>
-        <Drawer anchor="right" open={open} onClose={() => setOpen(false)}>
-          <Box sx={{ width: 340 }}>
-            <Typography variant="subtitle2" sx={{ p: 2, pb: 0 }}>
-              Checkpoints
-            </Typography>
-            {table}
+        {/* Hands focus back to the map's trigger once the drawer has fully closed. */}
+        <Drawer
+          anchor="right"
+          open={open}
+          onClose={() => setOpen(false)}
+          slotProps={{
+            paper: { sx: { width: 'min(480px, 100vw)', maxWidth: '100vw' } },
+            transition: { onExited: () => triggerRef.current?.focus() },
+          }}
+        >
+          <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <Stack direction="row" sx={{ alignItems: 'center', px: 2, pt: 1.5, pb: 0.5 }}>
+              <Typography variant="subtitle2">Checkpoints</Typography>
+              <IconButton aria-label="Close checkpoints" size="small" onClick={() => setOpen(false)} sx={{ ml: 'auto' }}>
+                <CloseIcon fontSize="small" />
+              </IconButton>
+            </Stack>
+            <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>{filledTable}</Box>
           </Box>
         </Drawer>
       </>

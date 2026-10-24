@@ -21,6 +21,8 @@ interface CheckpointTableProps {
   weatherSamples: Record<string, WeatherSample>;
   selectedIndex: number | null;
   onSelectCheckpoint: (index: number) => void;
+  /** Grow to fill the parent's height instead of capping at 240px (used by the tablet drawer). */
+  fill?: boolean;
 }
 
 export function CheckpointTable({
@@ -28,6 +30,7 @@ export function CheckpointTable({
   weatherSamples,
   selectedIndex,
   onSelectCheckpoint,
+  fill = false,
 }: CheckpointTableProps) {
   const isMobile = useMediaQuery('(max-width:767.98px)');
   const rowRefs = useRef<Record<number, HTMLElement | null>>({});
@@ -92,7 +95,7 @@ export function CheckpointTable({
   }
 
   return (
-    <TableContainer sx={{ maxHeight: 240 }}>
+    <TableContainer sx={fill ? { flex: 1, minHeight: 0 } : { maxHeight: 240 }}>
       <Table size="small" stickyHeader aria-label="Checkpoints">
         <TableHead>
           <TableRow>
